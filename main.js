@@ -1,6 +1,6 @@
 const fs = require("fs");
 
-function getShiftDuration(startTime, endTime) {  
+function getShiftDuration(startTime, endTime) {
     return secondsToTime(differenceTime(convertTo24(startTime), convertTo24(endTime)));
 }
 
@@ -27,14 +27,6 @@ function getIdleTime(startTime, endTime) {
 }
 
 function getActiveTime(shiftDuration, idleTime) {
-    function formatTime(time) {
-        if (time.length !== 11) {
-            time = "0" + time;
-        }
-
-        return time;
-    }
-
     shiftDuration = formatTime(shiftDuration);
     idleTime = formatTime(idleTime);
     
@@ -42,36 +34,73 @@ function getActiveTime(shiftDuration, idleTime) {
     return secondsToTime(difference);
 }
 
-// ============================================================
-// Function 4: metQuota(date, activeTime)
-// date: (typeof string) formatted as yyyy-mm-dd
-// activeTime: (typeof string) formatted as h:mm:ss
-// Returns: boolean
-// ============================================================
 function metQuota(date, activeTime) {
-    // TODO: Implement this function
+    activeTime = formatTime(activeTime);
+    let isEid = isDateEid(date);
+    let timeInSeconds = timeToSeconds(activeTime);
+
+    if (!isEid && timeInSeconds >= 30240) {
+        return true;
+    } else if (isEid && timeInSeconds >= 21600) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
-// ============================================================
-// Function 5: addShiftRecord(textFile, shiftObj)
-// textFile: (typeof string) path to shifts text file
-// shiftObj: (typeof object) has driverID, driverName, date, startTime, endTime
-// Returns: object with 10 properties or empty object {}
-// ============================================================
 function addShiftRecord(textFile, shiftObj) {
-    // TODO: Implement this function
+    const data = fs.readFileSync(textFile, "utf8");
+    const lines = data.split("\n");
+
+    for (let i = 0; i < lines.length; i++) {
+        const elements = lines[i].split(",");
+        const driverID = elements[0];
+        const date = elements[2];
+
+        if (!(driverID === shiftObj.driverID && date === shiftObj.date)) {
+            return {};
+        }
+    }
+
+    const shiftDuration = getShiftDuration(shiftObj.startTime, shiftObj.endTime);
+    const idleTime = getIdleTime(shiftObj.startTime, shiftObj.endTime);
+    const activeTime = getActiveTime(shiftDuration, idleTime);
+
+    const newLine = shiftObj.driverID + "," +
+                    shiftObj.driverName + "," +
+                    shiftObj.date + "," +
+                    shiftObj.startTime + "," +
+                    shiftObj.endTime + "," +
+                    shiftDuration + "," +
+                    idleTime + "," +
+                    activeTime + "," +
+                    metQuota(shiftObj.date, activeTime) + "," +
+                    "false";
+    
+    fs.appendFileSync(textFile, "\n" + newLine);
 }
 
-// ============================================================
-// Function 6: setBonus(textFile, driverID, date, newValue)
-// textFile: (typeof string) path to shifts text file
-// driverID: (typeof string)
-// date: (typeof string) formatted as yyyy-mm-dd
-// newValue: (typeof boolean)
-// Returns: nothing (void)
-// ============================================================
 function setBonus(textFile, driverID, date, newValue) {
-    // TODO: Implement this function
+    const data = fs.readFileSync(textFile, "utf8");
+    let lines = data.split("\n");
+
+    for (let i = 0; i < lines.length; i++) {
+        const elements = lines[i].split(",");
+
+        if (elements[0] === driverID && elements[2] === date) {
+            let newLine = "";
+
+            for (let j = 0; j < elements.length - 1; j++) {
+                newLine += elements[j] + ",";
+            }
+
+            newLine += String(newValue);
+
+            lines[i] = newLine;
+            const newData = lines.join("\n");
+            fs.writeFileSync(textFile, newData);
+        }
+    }
 }
 
 // ============================================================
@@ -225,12 +254,28 @@ function secondsToTime(totalSeconds) {
     return time;
 }
 
-function main() {
-    let shiftDuration =  "5:00:10";
-    let idleTime = "2:30:00";
-    let activeTime = getActiveTime(shiftDuration, idleTime);
+function formatTime(time) {
+    if (time.length !== 11 && time.length !== 8) {
+        return "0" + String(time);
+    } else {
+        return time;
+    }
+}
 
-    console.log(activeTime);
+function isDateEid(date) {
+    let year = Number(date.substring(0, 4));
+    let month = Number(date.substring(5, 7));
+    let day = Number(date.substring(8, 10));
+
+    return (year === 2025) && (month === 4) && (day >= 10 && day <= 30);
+}
+
+function main() {
+    let date =  "2025-04-05";
+    let activeTime = "09:00:00";
+    let hasMetQuota = metQuota(date, activeTime);
+
+    console.log(hasMetQuota);
 }
 
 main();

@@ -1,21 +1,21 @@
 const fs = require("fs");
 
 function getShiftDuration(startTime, endTime) {
-    return secondsToTime(differenceTime(convertTo24(startTime), convertTo24(endTime)));
+    return differenceTime(convertTo24(startTime), convertTo24(endTime));
 }
 
 function getIdleTime(startTime, endTime) {
     let idleTime = 0;
 
     // find time before 8 am
-    let differenceStart = differenceTime(convertTo24(startTime), "08:00:00");
+    let differenceStart = timeToSeconds(differenceTime(convertTo24(startTime), "08:00:00"));
 
     if (differenceStart > 0) {
         idleTime += differenceStart;
     }
 
     // find time after 10 pm
-    let differenceEnd = differenceTime("22:00:00", convertTo24(endTime));
+    let differenceEnd = timeToSeconds(differenceTime("22:00:00", convertTo24(endTime)));
 
     if (differenceEnd > 0) {
         idleTime += differenceEnd;
@@ -31,7 +31,7 @@ function getActiveTime(shiftDuration, idleTime) {
     idleTime = formatTime(idleTime);
     
     let difference = differenceTime(idleTime, shiftDuration);
-    return secondsToTime(difference);
+    return difference;
 }
 
 function metQuota(date, activeTime) {
@@ -78,6 +78,7 @@ function addShiftRecord(textFile, shiftObj) {
                     "false";
     
     fs.appendFileSync(textFile, "\n" + newLine);
+    return shiftObj;
 }
 
 function setBonus(textFile, driverID, date, newValue) {
@@ -103,39 +104,59 @@ function setBonus(textFile, driverID, date, newValue) {
     }
 }
 
-// ============================================================
-// Function 7: countBonusPerMonth(textFile, driverID, month)
-// textFile: (typeof string) path to shifts text file
-// driverID: (typeof string)
-// month: (typeof string) formatted as mm or m
-// Returns: number (-1 if driverID not found)
-// ============================================================
 function countBonusPerMonth(textFile, driverID, month) {
-    // TODO: Implement this function
+    const data = fs.readFileSync(textFile, "utf8");
+    const lines = data.split("\n");
+
+    let count = 0;
+    let flag = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        const elements = lines[i].split(",");
+        const date = elements[2];
+        const thisMonth = Number((date.split("-"))[1]); // yyyy-mm-dd
+        const thisDriverID = Number(elements[0]);
+        const isBonus = Boolean(elements[9]);
+
+        if (thisDriverID === driverID) {
+            if (thisMonth === month && isBonus) {
+                count++;
+            }
+
+            flag = true;
+        }
+    }
+
+    if (!flag) {
+        return -1;
+    } else {
+        return count;
+    }
 }
 
-// ============================================================
-// Function 8: getTotalActiveHoursPerMonth(textFile, driverID, month)
-// textFile: (typeof string) path to shifts text file
-// driverID: (typeof string)
-// month: (typeof number)
-// Returns: string formatted as hhh:mm:ss
-// ============================================================
 function getTotalActiveHoursPerMonth(textFile, driverID, month) {
-    // TODO: Implement this function
+    const data = fs.readFileSync(textFile, "utf8");
+    const lines = data.split("\n");
+    let total = "00:00:00";
+
+    for (let i = 0; i < lines.length; i++) {
+        const elements = lines[i].split(",");
+        const date = elements[2];
+        const thisMonth = Number((date.split("-"))[1]); // yyyy-mm-dd
+        const thisDriverID = Number(elements[0]);
+
+        if (thisDriverID === driverID && thisMonth === month) {
+            const startTime = elements[3];
+            const endTime = elements[4];
+            total = addTime(total, getActiveTime(getShiftDuration(startTime, endTime), getIdleTime(startTime, endTime)));
+        } 
+    }
+
+    return total;
 }
 
-// ============================================================
-// Function 9: getRequiredHoursPerMonth(textFile, rateFile, bonusCount, driverID, month)
-// textFile: (typeof string) path to shifts text file
-// rateFile: (typeof string) path to driver rates text file
-// bonusCount: (typeof number) total bonuses for given driver per month
-// driverID: (typeof string)
-// month: (typeof number)
-// Returns: string formatted as hhh:mm:ss
-// ============================================================
 function getRequiredHoursPerMonth(textFile, rateFile, bonusCount, driverID, month) {
-    // TODO: Implement this function
+    
 }
 
 // ============================================================
@@ -215,10 +236,14 @@ function differenceTime(startTime, endTime) {
     startTime = timeToSeconds(startTime);
     endTime = timeToSeconds(endTime);
 
+    if (startTime > endTime) {
+        return "error";
+    }
+
     // subtract from each other
     let difference = endTime - startTime;
 
-    return difference;
+    return secondsToTime(difference);
 }
 
 function secondsToTime(totalSeconds) {
@@ -268,6 +293,15 @@ function isDateEid(date) {
     let day = Number(date.substring(8, 10));
 
     return (year === 2025) && (month === 4) && (day >= 10 && day <= 30);
+}
+
+function addTime(time1, time2) {
+    time1 = timeToSeconds(time1);
+    time2 = timeToSeconds(time2);
+
+    let total = time1 + time2;
+
+    return secondsToTime(total);
 }
 
 function main() {

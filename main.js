@@ -112,9 +112,12 @@ function countBonusPerMonth(textFile, driverID, month) {
     let flag = false;
 
     for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim() === "") {
+            continue;
+        }
         const elements = lines[i].split(",");
         const date = elements[2];
-        const thisMonth = Number((date.split("-"))[1]); // yyyy-mm-dd
+        const thisMonth = Number((date.split("-"))[1]);
         const thisDriverID = Number(elements[0]);
         const isBonus = Boolean(elements[9]);
 
@@ -141,7 +144,7 @@ function getTotalActiveHoursPerMonth(textFile, driverID, month) {
 
     for (let i = 0; i < lines.length; i++) {
         const elements = lines[i].split(",");
-        const date = elements[2];
+        const date = String(elements[2]);
         const thisMonth = Number((date.split("-"))[1]); // yyyy-mm-dd
         const thisDriverID = Number(elements[0]);
 
@@ -156,19 +159,69 @@ function getTotalActiveHoursPerMonth(textFile, driverID, month) {
 }
 
 function getRequiredHoursPerMonth(textFile, rateFile, bonusCount, driverID, month) {
-    
+    const hoursReduced = bonusCount * 2;
+    const dayCount = countMonthDays(month);
+    let hoursCount = 0;
+
+    for (let i = 0; i < 9; i++) {
+        if (!isDateEid("2024-" + month + "-" + (i + 1))) {
+            hoursCount += 8.4;
+        } else {
+            hoursCount += 6;
+        }
+    }
+
+    for (let i = 9; i < dayCount; i++) {
+        if (!isDateEid("2024-" + month + "-" + (i + 1))) {
+            hoursCount += 8.4;
+        } else {
+            hoursCount += 6;
+        }
+    }
+
+    const secondsCount = (hoursCount - hoursReduced) * 60 * 60;
+
+    return secondsToTime(secondsCount);
 }
 
-// ============================================================
-// Function 10: getNetPay(driverID, actualHours, requiredHours, rateFile)
-// driverID: (typeof string)
-// actualHours: (typeof string) formatted as hhh:mm:ss
-// requiredHours: (typeof string) formatted as hhh:mm:ss
-// rateFile: (typeof string) path to driver rates text file
-// Returns: integer (net pay)
-// ============================================================
 function getNetPay(driverID, actualHours, requiredHours, rateFile) {
-    // TODO: Implement this function
+    // driverID, dayOff, basePay, tiers
+    let missingHours = timeToSeconds(requiredHours) - timeToSeconds(actualHours) / 3600;
+    let basePay = 0;
+    let tier = 0;
+    
+    const data = fs.readFileSync(rateFile, "utf8");
+    const lines = data.split("\n");
+
+    for (let i = 0; i < lines.length; i++) {
+        const elements = lines[i].split(",");
+        const thisDriverID = Number(elements[0]);
+        
+        if (thisDriverID === driverID) {
+            basePay = Number(elements[2]);
+            tier = Number(elements[3]);
+            break;
+        }
+    }
+
+    let allowedMissingHours = 0;
+
+    switch (tier) {
+        case 1: allowedMissingHours = 50; break;
+        case 2: allowedMissingHours = 20; break;
+        case 3: allowedMissingHours = 10; break;
+        case 4: allowedMissingHours = 3; break;
+    }
+
+    missingHours -= allowedMissingHours;
+
+    let actualPay = basePay;
+
+    if (missingHours > 0) {
+        actualPay -= Math.roundDown((basePay / 185) * missingHours);
+    }
+
+    return actualPay;
 }
 
 module.exports = {
@@ -184,9 +237,7 @@ module.exports = {
     getNetPay
 };
 
-// ============================================================
 // HELPER FUNCTIONS
-// ============================================================
 
 function convertTo24(time) {
     let isPM = time.toLowerCase().includes("pm");
@@ -302,6 +353,28 @@ function addTime(time1, time2) {
     let total = time1 + time2;
 
     return secondsToTime(total);
+}
+
+function countMonthDays(month) {
+    month = Number(month);
+
+    switch(month) {
+        case 1:
+        case 3:
+        case 5:
+        case 7:
+        case 8:
+        case 10:
+        case 12:
+            return 31;
+        case 2:
+            return 29;
+        case 4:
+        case 6:
+        case 9:
+        case 11:
+            return 30;
+    }
 }
 
 function main() {

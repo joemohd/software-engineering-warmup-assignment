@@ -26,16 +26,11 @@ function getIdleTime(startTime, endTime) {
     return idleTime;
 }
 
-function getActiveTime(shiftDuration, idleTime) {
-    shiftDuration = formatTime(shiftDuration);
-    idleTime = formatTime(idleTime);
-    
-    let difference = differenceTime(idleTime, shiftDuration);
-    return difference;
+function getActiveTime(shiftDuration, idleTime) {  
+    return differenceTime(idleTime, shiftDuration);
 }
 
 function metQuota(date, activeTime) {
-    activeTime = formatTime(activeTime);
     let isEid = isDateEid(date);
     let timeInSeconds = timeToSeconds(activeTime);
 
@@ -53,11 +48,14 @@ function addShiftRecord(textFile, shiftObj) {
     const lines = data.split("\n");
 
     for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim() == "") {
+            continue;
+        }
         const elements = lines[i].split(",");
-        const driverID = elements[0];
-        const date = elements[2];
+        const driverID = elements[0].trim();
+        const date = elements[2].trim();
 
-        if (!(driverID === shiftObj.driverID && date === shiftObj.date)) {
+        if (driverID === shiftObj.driverID && date === shiftObj.date) {
             return {};
         }
     }
@@ -119,10 +117,10 @@ function countBonusPerMonth(textFile, driverID, month) {
         const date = elements[2];
         const thisMonth = Number((date.split("-"))[1]);
         const thisDriverID = Number(elements[0]);
-        const isBonus = Boolean(elements[9]);
+        const isBonus = (elements[9] === "true");
 
-        if (thisDriverID === driverID) {
-            if (thisMonth === month && isBonus) {
+        if (thisDriverID == driverID) {
+            if (thisMonth == month && isBonus) {
                 count++;
             }
 
@@ -130,7 +128,7 @@ function countBonusPerMonth(textFile, driverID, month) {
         }
     }
 
-    if (!flag) {
+    if (flag === false) {
         return -1;
     } else {
         return count;
@@ -163,15 +161,7 @@ function getRequiredHoursPerMonth(textFile, rateFile, bonusCount, driverID, mont
     const dayCount = countMonthDays(month);
     let hoursCount = 0;
 
-    for (let i = 0; i < 9; i++) {
-        if (!isDateEid("2024-" + month + "-" + (i + 1))) {
-            hoursCount += 8.4;
-        } else {
-            hoursCount += 6;
-        }
-    }
-
-    for (let i = 9; i < dayCount; i++) {
+    for (let i = 0; i < dayCount; i++) {
         if (!isDateEid("2024-" + month + "-" + (i + 1))) {
             hoursCount += 8.4;
         } else {
@@ -181,7 +171,7 @@ function getRequiredHoursPerMonth(textFile, rateFile, bonusCount, driverID, mont
 
     const secondsCount = (hoursCount - hoursReduced) * 60 * 60;
 
-    return secondsToTime(secondsCount);
+    return secondsToTime(Math.round(secondsCount));
 }
 
 function getNetPay(driverID, actualHours, requiredHours, rateFile) {
@@ -218,7 +208,7 @@ function getNetPay(driverID, actualHours, requiredHours, rateFile) {
     let actualPay = basePay;
 
     if (missingHours > 0) {
-        actualPay -= Math.roundDown((basePay / 185) * missingHours);
+        actualPay -= Math.floor((basePay / 185) * missingHours);
     }
 
     return actualPay;
@@ -298,9 +288,10 @@ function differenceTime(startTime, endTime) {
 }
 
 function isDateEid(date) {
-    let year = Number(date.substring(0, 4));
-    let month = Number(date.substring(5, 7));
-    let day = Number(date.substring(8, 10));
+    let dateArray = date.split("-");
+    let year = Number(dateArray[0]);
+    let month = Number(dateArray[1]);
+    let day = Number(dateArray[2]);
 
     return (year === 2025) && (month === 4) && (day >= 10 && day <= 30);
 }
@@ -312,9 +303,7 @@ function addTime(time1, time2) {
     return secondsToTime(time1 + time2);
 }
 
-function countMonthDays(month) {
-    month = Number(month);
-
+function countMonthDays(month, year) {
     switch(month) {
         case 1:
         case 3:
@@ -325,7 +314,11 @@ function countMonthDays(month) {
         case 12:
             return 31;
         case 2:
-            return 29;
+            if (year % 4 == 0 && year % 100 != 0 && year % 400 == 0) {
+                return 29;
+            } else {
+                return 28;
+            }
         case 4:
         case 6:
         case 9:
@@ -333,13 +326,3 @@ function countMonthDays(month) {
             return 30;
     }
 }
-
-function main() {
-    let date =  "2025-04-05";
-    let activeTime = "09:00:00";
-    let hasMetQuota = metQuota(date, activeTime);
-
-    console.log(hasMetQuota);
-}
-
-main();

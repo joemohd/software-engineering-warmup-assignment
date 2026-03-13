@@ -240,61 +240,29 @@ module.exports = {
 // HELPER FUNCTIONS
 
 function convertTo24(time) {
-    let isPM = time.toLowerCase().includes("pm");
-    let currentHour = Number(time.slice(0, time.indexOf(":")));
-    let newHour = currentHour;
-    
-    if (isPM && currentHour != 12) {
-        newHour += 12;
-    } else if (!isPM && currentHour == 12) {
-        newHour = 0;
+    time = time.trim().toLowerCase();
+    let isPM = time.includes("pm");
+    time = time.split(" ")[0];
+    let timeArray = time.split(":");
+
+    if (isPM && Number(timeArray[0]) < 12) {
+        timeArray[0] = String(Number(timeArray[0]) + 12);
+    } else if (!isPM && Number(timeArray[0]) == 12) {
+        timeArray[0] = "0";
     }
 
-    let newTime = "";
+    time = timeArray.join(":");
 
-    if (newHour === 0) {
-        newTime += String("00");
-    } else {
-        if (parseInt(newHour / 10) === 0) {
-            newTime += "0";
-        }
-
-        newTime += newHour;
-    }
-
-    if (time.length === 11) {
-        newTime += time.substring(2, 8);
-    } else {
-        newTime += time.substring(1, 7);
-    }
-
-    return newTime;
+    return time;
 }
 
 function timeToSeconds(time) {
-    let hours = Number(time.substring(0, 2));
-    let minutes = Number(time.substring(3, 5));
-    let seconds = Number(time.substring(6, 8));
+    let timeArray = time.split(":");
+    let hours = Number(timeArray[0]);
+    let minutes = Number(timeArray[1]);
+    let seconds = Number(timeArray[2]);
 
-    minutes += (hours * 60);
-    seconds += (minutes * 60);
-
-    return seconds;
-}
-
-function differenceTime(startTime, endTime) {
-    // convert to seconds
-    startTime = timeToSeconds(startTime);
-    endTime = timeToSeconds(endTime);
-
-    if (startTime > endTime) {
-        return "error";
-    }
-
-    // subtract from each other
-    let difference = endTime - startTime;
-
-    return secondsToTime(difference);
+    return hours * 3600 + minutes * 60 + seconds;
 }
 
 function secondsToTime(totalSeconds) {
@@ -303,39 +271,30 @@ function secondsToTime(totalSeconds) {
     const minutes = totalMinutes % 60;
     const hours = Math.floor(totalMinutes / 60);
 
-    let time = "";
+    let time = hours + ":";
 
-    if (Math.floor(hours / 10) === 0) {
-        time += "0" + String(hours);
+    if (minutes < 10) {
+        time += "0" + minutes;
     } else {
-        time += String(hours);
+        time += minutes;
     }
 
     time += ":";
 
-    if (Math.floor(minutes / 10) === 0) {
-        time += "0" + String(minutes);
+    if (seconds < 10) {
+        time += "0" + seconds;
     } else {
-        time += String(minutes);
-    }
-
-    time += ":";
-
-    if (Math.floor(seconds / 10) === 0) {
-        time += "0" + String(seconds);
-    } else {
-        time += String(seconds);
+        time += seconds;
     }
 
     return time;
 }
 
-function formatTime(time) {
-    if (time.length !== 11 && time.length !== 8) {
-        return "0" + String(time);
-    } else {
-        return time;
-    }
+function differenceTime(startTime, endTime) {
+    startTime = timeToSeconds(startTime);
+    endTime = timeToSeconds(endTime);
+
+    return secondsToTime(endTime - startTime);
 }
 
 function isDateEid(date) {
@@ -350,9 +309,7 @@ function addTime(time1, time2) {
     time1 = timeToSeconds(time1);
     time2 = timeToSeconds(time2);
 
-    let total = time1 + time2;
-
-    return secondsToTime(total);
+    return secondsToTime(time1 + time2);
 }
 
 function countMonthDays(month) {

@@ -26,7 +26,7 @@ function getIdleTime(startTime, endTime) {
     return idleTime;
 }
 
-function getActiveTime(shiftDuration, idleTime) {  
+function getActiveTime(shiftDuration, idleTime) {
     return differenceTime(idleTime, shiftDuration);
 }
 
@@ -63,20 +63,34 @@ function addShiftRecord(textFile, shiftObj) {
     const shiftDuration = getShiftDuration(shiftObj.startTime, shiftObj.endTime);
     const idleTime = getIdleTime(shiftObj.startTime, shiftObj.endTime);
     const activeTime = getActiveTime(shiftDuration, idleTime);
+    const hasMetQuota = metQuota(shiftObj.date, activeTime);
 
     const newLine = shiftObj.driverID + "," +
-                    shiftObj.driverName + "," +
-                    shiftObj.date + "," +
-                    shiftObj.startTime + "," +
-                    shiftObj.endTime + "," +
-                    shiftDuration + "," +
-                    idleTime + "," +
-                    activeTime + "," +
-                    metQuota(shiftObj.date, activeTime) + "," +
-                    "false";
-    
+        shiftObj.driverName + "," +
+        shiftObj.date + "," +
+        shiftObj.startTime + "," +
+        shiftObj.endTime + "," +
+        shiftDuration + "," +
+        idleTime + "," +
+        activeTime + "," +
+        hasMetQuota + "," +
+        "false";
+
+    const newObject = {
+        driverID: shiftObj.driverID,
+        driverName: shiftObj.driverName,
+        date: shiftObj.date,
+        startTime: shiftObj.startTime,
+        endTime: shiftObj.endTime,
+        shiftDuration: shiftDuration,
+        idleTime: idleTime,
+        activeTime: activeTime,
+        hasMetQuota: hasMetQuota,
+        hasBonus: false
+    };
+
     fs.appendFileSync(textFile, "\n" + newLine);
-    return shiftObj;
+    return newObject;
 }
 
 function setBonus(textFile, driverID, date, newValue) {
@@ -86,7 +100,7 @@ function setBonus(textFile, driverID, date, newValue) {
     for (let i = 0; i < lines.length; i++) {
         const elements = lines[i].split(",");
 
-        if (elements[0] === driverID && elements[2] === date) {
+        if (elements[0].trim() === driverID && elements[2] === date) {
             let newLine = "";
 
             for (let j = 0; j < elements.length - 1; j++) {
@@ -116,8 +130,8 @@ function countBonusPerMonth(textFile, driverID, month) {
         const elements = lines[i].split(",");
         const date = elements[2];
         const thisMonth = Number((date.split("-"))[1]);
-        const thisDriverID = Number(elements[0]);
-        const isBonus = (elements[9] === "true");
+        const thisDriverID = elements[0].trim();
+        const isBonus = (elements[9].substring(0, 4) === "true");
 
         if (thisDriverID == driverID) {
             if (thisMonth == month && isBonus) {
@@ -144,31 +158,63 @@ function getTotalActiveHoursPerMonth(textFile, driverID, month) {
         const elements = lines[i].split(",");
         const date = String(elements[2]);
         const thisMonth = Number((date.split("-"))[1]); // yyyy-mm-dd
-        const thisDriverID = Number(elements[0]);
+        const thisDriverID = elements[0].trim();
 
         if (thisDriverID === driverID && thisMonth === month) {
             const startTime = elements[3];
             const endTime = elements[4];
             total = addTime(total, getActiveTime(getShiftDuration(startTime, endTime), getIdleTime(startTime, endTime)));
-        } 
+        }
     }
 
     return total;
 }
 
 function getRequiredHoursPerMonth(textFile, rateFile, bonusCount, driverID, month) {
-    const hoursReduced = bonusCount * 2;
-    const dayCount = countMonthDays(month);
+    const data = fs.readFileSync(textFile, "utf8");
+    const lines = data.split("\n");
     let hoursCount = 0;
 
-    for (let i = 0; i < dayCount; i++) {
-        if (!isDateEid("2024-" + month + "-" + (i + 1))) {
+    let workedDays = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        if (lines[i].trim() === "") {
+            continue;
+        }
+
+        const elements = lines[i].split(",");
+
+        const thisDriverID = elements[0].trim();
+        const date = elements[2].trim();
+        const dateParts = date.split("-");
+
+        if (dateParts.length >= 2) {
+            const thisMonth = Number(dateParts[1]);
+            if (thisDriverID === driverID && thisMonth === month) {
+                let duplicate = false;
+                for (let j = 0; j < workedDays.length; j++) {
+                    if (workedDays[j] === date) {
+                        duplicate = true;
+                        break;
+                    }
+                }
+
+                if (!duplicate) {
+                    workedDays.push(date);
+                }
+            }
+        }
+    }
+
+    for (let i = 0; i < workedDays.length; i++) {
+        if (!isDateEid(workedDays[i])) {
             hoursCount += 8.4;
         } else {
             hoursCount += 6;
         }
     }
 
+    const hoursReduced = bonusCount * 2;
     const secondsCount = (hoursCount - hoursReduced) * 60 * 60;
 
     return secondsToTime(Math.round(secondsCount));
@@ -176,17 +222,17 @@ function getRequiredHoursPerMonth(textFile, rateFile, bonusCount, driverID, mont
 
 function getNetPay(driverID, actualHours, requiredHours, rateFile) {
     // driverID, dayOff, basePay, tiers
-    let missingHours = timeToSeconds(requiredHours) - timeToSeconds(actualHours) / 3600;
+    let missingHours = Math.floor((timeToSeconds(requiredHours) - timeToSeconds(actualHours)) / 3600);
     let basePay = 0;
     let tier = 0;
-    
+
     const data = fs.readFileSync(rateFile, "utf8");
     const lines = data.split("\n");
 
     for (let i = 0; i < lines.length; i++) {
         const elements = lines[i].split(",");
-        const thisDriverID = Number(elements[0]);
-        
+        const thisDriverID = elements[0].trim();
+
         if (thisDriverID === driverID) {
             basePay = Number(elements[2]);
             tier = Number(elements[3]);
@@ -304,7 +350,7 @@ function addTime(time1, time2) {
 }
 
 function countMonthDays(month, year) {
-    switch(month) {
+    switch (month) {
         case 1:
         case 3:
         case 5:
